@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minesweeper: Oracle — Tests</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: #0a0e17;
+      color: #e2e8f0;
+      padding: 32px;
+    }
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 20px;
+      color: #6366f1;
+    }
+    .test-summary {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .test-summary.all-pass {
+      background: rgba(29, 158, 117, 0.15);
+      border: 1px solid rgba(29, 158, 117, 0.4);
+      color: #1D9E75;
+    }
+    .test-summary.has-failures {
+      background: rgba(226, 75, 74, 0.15);
+      border: 1px solid rgba(226, 75, 74, 0.4);
+      color: #E24B4A;
+    }
+    .test-result {
+      padding: 6px 12px;
+      margin: 4px 0;
+      border-radius: 4px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 0.85rem;
+    }
+    .test-result.pass {
+      color: #81C784;
+      background: rgba(129, 199, 132, 0.07);
+    }
+    .test-result.fail {
+      color: #E24B4A;
+      background: rgba(226, 75, 74, 0.12);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Minesweeper: Oracle — Test Suite</h1>
+  <div id="test-results"></div>
+
+  <!-- Load source modules (no config needed for tests) -->
+  <script>var GEMINI_API_KEY = null;</script>
+  <script src="../src/game.js"></script>
+  <script src="../src/gemini.js"></script>
+  <script src="../src/firebase.js"></script>
+  <script src="gemini.test.js"></script>
+</body>
+</html>

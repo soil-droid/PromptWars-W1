@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Minesweeper: Oracle — Classic Minesweeper powered by Google Gemini AI probability analysis. Play with an AI oracle that reveals mine probabilities in real-time.">
+  <title>Minesweeper: Oracle 🔮</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       ROOT & CUSTOM PROPERTIES
+       ═══════════════════════════════════════════════════════ */
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #111827;
+      --bg-card: rgba(17, 24, 39, 0.75);
+      --bg-cell: #1a2236;
+      --bg-cell-hover: #243050;
+      --bg-revealed: #0d1321;
+      --border-subtle: rgba(99, 102, 241, 0.15);
+      --border-glow: rgba(99, 102, 241, 0.35);
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-indigo: #6366f1;
+      --accent-cyan: #06b6d4;
+      --accent-green: #1D9E75;
+      --accent-red: #E24B4A;
+      --accent-yellow: #E8C841;
+      --glass-bg: rgba(17, 24, 39, 0.6);
+      --glass-border: rgba(99, 102, 241, 0.2);
+      --cell-size: 36px;
+      --radius: 8px;
+      --radius-lg: 16px;
+      --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --transition-fast: 0.15s ease;
+      --transition-normal: 0.3s ease;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESET & BASE
+       ═══════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* Animated gradient background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(29, 158, 117, 0.05) 0%, transparent 50%);
+      z-index: 0;
+      pointer-events: none;
+      animation: bgShift 20s ease-in-out infinite alternate;
+    }
+
+    @keyframes bgShift {
+      0%   { opacity: 1; }
+      50%  { opacity: 0.7; }
+      100% { opacity: 1; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       HEADER
+       ═══════════════════════════════════════════════════════ */
+    header {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 900px;
+      text-align: center;
+      padding: 28px 20px 12px;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    h1 .oracle-icon {
+      -webkit-text-fill-color: initial;
+      font-size: 1.4rem;
+    }
+
+    .game-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 12px 24px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .stat-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.1rem;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .stat-box .icon { font-size: 1.2rem; }
+    .stat-box .label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .stat-box-vertical {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #new-game-btn {
+      background: linear-gradient(135deg, var(--accent-indigo), #8b5cf6);
+      color: #fff;
+      border: none;
+      padding: 8px 20px;
+      border-radius: var(--radius);
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    #new-game-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+    }
+
+    #new-game-btn:active { transform: translateY(0); }
+
+    /* ═══════════════════════════════════════════════════════
+       MAIN LAYOUT
+       ═══════════════════════════════════════════════════════ */
+    main {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      gap: 24px;
+      padding: 16px 20px 40px;
+      max-width: 1080px;
+      width: 100%;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       GAME BOARD
+       ═══════════════════════════════════════════════════════ */
+    #game-board {
+      flex-shrink: 0;
+    }
+
+    #game-board table {
+      border-collapse: separate;
+      border-spacing: 2px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 8px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* ── Cell Styles ──────────────────────────────────── */
+    .cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
+      text-align: center;
+      vertical-align: middle;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 4px;
+      transition:
+        background-color 0.4s ease,
+        box-shadow 0.4s ease,
+        transform var(--transition-fast);
+      position: relative;
+      user-select: none;
+      outline: none;
+      border: none;
+    }
+
+    .cell:focus-visible {
+      outline: 2px solid var(--accent-cyan);
+      outline-offset: -2px;
+      z-index: 2;
+    }
+
+    .cell.hidden {
+      background: var(--bg-cell);
+      border: 1px solid rgba(99, 102, 241, 0.1);
+    }
+
+    .cell.hidden:hover {
+      background: var(--bg-cell-hover);
+      transform: scale(1.08);
+      z-index: 1;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+    }
+
+    .cell.revealed {
+      background: var(--bg-revealed);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      cursor: default;
+    }
+
+    .cell.flagged {
+      background: linear-gradient(135deg, rgba(232, 200, 65, 0.15), rgba(226, 75, 74, 0.15));
+      border: 1px solid rgba(232, 200, 65, 0.3);
+      font-size: 0.95rem;
+    }
+
+    .cell.mine {
+      background: rgba(226, 75, 74, 0.2);
+      border: 1px solid rgba(226, 75, 74, 0.4);
+      font-size: 1rem;
+    }
+
+    .cell.mine-hit {
+      background: rgba(226, 75, 74, 0.6) !important;
+      animation: mineExplode 0.5s ease;
+      box-shadow: 0 0 24px rgba(226, 75, 74, 0.6);
+    }
+
+    @keyframes mineExplode {
+      0%   { transform: scale(1); }
+      30%  { transform: scale(1.3); }
+      60%  { transform: scale(0.9); }
+      100% { transform: scale(1); }
+    }
+
+    .cell.revealing {
+      animation: cellReveal 0.3s ease;
+    }
+
+    @keyframes cellReveal {
+      0%   { transform: scale(0.6) rotateX(90deg); opacity: 0; }
+      100% { transform: scale(1) rotateX(0deg); opacity: 1; }
+    }
+
+    .cell.hint-pulse {
+      animation: hintPulse 0.5s ease infinite alternate;
+    }
+
+    @keyframes hintPulse {
+      0%   { box-shadow: 0 0 6px rgba(99, 102, 241, 0.4); transform: scale(1); }
+      100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.8); transform: scale(1.1); }
+    }
+
+    /* Probability label overlay */
+    .prob-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 0.6rem;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+      line-height: 1;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       SIDEBAR — ORACLE PANEL
+       ═══════════════════════════════════════════════════════ */
+    aside {
+      width: 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .panel {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .panel-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .panel-title::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-indigo);
+      box-shadow: 0 0 8px var(--accent-indigo);
+    }
+
+    /* Oracle Status */
+    #oracle-status {
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    /* Confidence meter */
+    .confidence-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 6px 0;
+    }
+
+    #confidence-meter {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan));
+      border-radius: 4px;
+      transition: width 0.6s ease;
+      font-size: 0.55rem;
+      color: #fff;
+      line-height: 8px;
+      text-align: right;
+      padding-right: 4px;
+      min-width: 0;
+    }
+
+    /* Oracle call counter */
+    .oracle-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      padding: 4px 0;
+    }
+
+    .oracle-stat .value {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    /* Reasoning text */
+    #oracle-reasoning {
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      min-height: 60px;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: var(--radius);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    /* Buttons */
+    .oracle-btn {
+      width: 100%;
+      padding: 10px 16px;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      background: rgba(99, 102, 241, 0.1);
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .oracle-btn:hover {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: var(--accent-indigo);
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.15);
+    }
+
+    .oracle-btn:active { transform: scale(0.97); }
+    .oracle-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ═══════════════════════════════════════════════════════
+       GAME OVER OVERLAY
+       ═══════════════════════════════════════════════════════ */
+    #game-over-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s ease;
+    }
+
+    #game-over-overlay.visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .game-over-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 40px 48px;
+      text-align: center;
+      max-width: 480px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+      animation: cardSlideIn 0.6s ease;
+    }
+
+    @keyframes cardSlideIn {
+      0%   { transform: scale(0.8) translateY(40px); opacity: 0; }
+      100% { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    #game-over-title {
+      font-size: 2.4rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    #game-over-subtitle {
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+
+    #death-narration {
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      font-style: italic;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      min-height: 48px;
+      border-left: 3px solid var(--accent-indigo);
+    }
+
+    #play-again-btn {
+      background: linear-gradient(135deg, var(--accent-indigo), #8b5cf6);
+      color: #fff;
+      border: none;
+      padding: 12px 32px;
+      border-radius: var(--radius);
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    #play-again-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESPONSIVE
+       ═══════════════════════════════════════════════════════ */
+    @media (max-width: 820px) {
+      main { flex-direction: column; align-items: center; }
+      aside { width: 100%; max-width: 600px; flex-direction: row; flex-wrap: wrap; }
+      aside .panel { flex: 1; min-width: 200px; }
+      :root { --cell-size: 28px; }
+      .prob-label { font-size: 0.5rem; }
+    }
+
+    @media (max-width: 520px) {
+      :root { --cell-size: 22px; }
+      h1 { font-size: 1.2rem; }
+      .game-controls { gap: 12px; padding: 10px 16px; }
+      .stat-box { font-size: 0.9rem; }
+      .game-over-card { padding: 28px 24px; }
+      #game-over-title { font-size: 1.8rem; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       SCROLLBAR
+       ═══════════════════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-glow); }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════ HEADER ═══════ -->
+  <header>
+    <div class="title-row">
+      <h1><span class="oracle-icon">🔮</span> Minesweeper: Oracle</h1>
+    </div>
+    <div class="game-controls">
+      <div class="stat-box stat-box-vertical">
+        <div><span class="icon">💣</span> <span id="mine-count">040</span></div>
+        <span class="label">Mines</span>
+      </div>
+      <div class="stat-box stat-box-vertical">
+        <div><span class="icon">⏱️</span> <span id="timer">00:00</span></div>
+        <span class="label">Time</span>
+      </div>
+      <button id="new-game-btn" aria-label="Start new game">New Game</button>
+    </div>
+  </header>
+
+  <!-- ═══════ MAIN ═══════ -->
+  <main>
+    <!-- Board -->
+    <div id="game-board" role="application" aria-label="Minesweeper game board"></div>
+
+    <!-- Oracle Side Panel -->
+    <aside aria-label="Oracle analysis panel">
+
+      <div class="panel">
+        <div class="panel-title">Oracle Status</div>
+        <div id="oracle-status">🟢 Online</div>
+        <div class="panel-title" style="margin-top: 12px;">Confidence</div>
+        <div class="confidence-bar"><div id="confidence-meter" role="meter" aria-label="Oracle confidence" aria-valuemin="0" aria-valuemax="100"></div></div>
+        <div class="oracle-stat">
+          <span>Oracle consulted</span>
+          <span class="value"><span id="oracle-count">0</span> times</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Oracle Reasoning</div>
+        <div id="oracle-reasoning">Waiting for first move…</div>
+      </div>
+
+      <div class="panel" style="display: flex; flex-direction: column; gap: 8px;">
+        <button id="heatmap-toggle" class="oracle-btn" aria-label="Toggle Oracle probability heatmap" aria-pressed="false">🔮 Show Oracle Vision</button>
+        <button id="ask-oracle" class="oracle-btn" aria-label="Ask Oracle for strategic hint">💡 Ask Oracle</button>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- ═══════ GAME OVER OVERLAY ═══════ -->
+  <div id="game-over-overlay" role="dialog" aria-modal="true" aria-label="Game over">
+    <div class="game-over-card">
+      <div id="game-over-title">💀 Game Over</div>
+      <div id="game-over-subtitle">Survived for 00:00</div>
+      <div id="death-narration"></div>
+      <button id="play-again-btn" aria-label="Play again">Play Again</button>
+    </div>
+  </div>
+
+  <!-- ═══════ SCRIPTS ═══════ -->
+  <script>
+    // Provide a fallback if config.js is missing
+    if (typeof GEMINI_API_KEY === 'undefined') {
+      var GEMINI_API_KEY = null;
+    }
+  </script>
+  <script src="config.js" onerror="console.info('[Oracle] No config.js found — Oracle will be offline. Copy config.example.js to config.js and add your API key.')"></script>
+  <script src="src/game.js"></script>
+  <script src="src/gemini.js"></script>
+  <script src="src/firebase.js"></script>
+  <script src="src/ui.js"></script>
+</body>
+</html>

@@ -587,6 +587,11 @@
         <button id="ask-oracle" class="oracle-btn" aria-label="Ask Oracle for strategic hint">💡 Ask Oracle</button>
       </div>
 
+      <div class="panel">
+        <div class="panel-title">Top Oracles</div>
+        <div id="leaderboard-list">Leaderboard loading...</div>
+      </div>
+
     </aside>
   </main>
 
@@ -603,8 +608,8 @@
   <!-- ═══════ SCRIPTS ═══════ -->
   <script>
     // Provide a fallback if config.js is missing
-    if (typeof GEMINI_API_KEY === 'undefined') {
-      var GEMINI_API_KEY = null;
+    if (typeof CONFIG === 'undefined') {
+      window.CONFIG = { GEMINI_API_KEY: null, FIREBASE_CONFIG: null };
     }
   </script>
   <script src="config.js" onerror="console.info('[Oracle] No config.js found — Oracle will be offline. Copy config.example.js to config.js and add your API key.')"></script>

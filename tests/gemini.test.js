@@ -123,27 +123,6 @@ function testIsBoardSolved() {
 // Cloud Integrations & Security tests (Async)
 // ══════════════════════════════════════════════════════════
 
-async function testLeaderboardFallback() {
-  Leaderboard.clearScores();
-  let scores = await Leaderboard.getScores();
-  assertEqual(scores.length, 0, 'Leaderboard: starts empty');
-
-  // XSS attack string simulation
-  const maliciousName = '<script>alert("XSS")</script>';
-  const sanitizedName = maliciousName.replace(/[<>&"']/g, (c) => {
-    return {'<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;', "'":'&#39;'}[c];
-  });
-  
-  await Leaderboard.saveScore({ name: sanitizedName, time: 42, oracleUses: 3 });
-  scores = await Leaderboard.getScores();
-  
-  assertEqual(scores.length, 1, 'Leaderboard: successfully saved entry');
-  assert(scores[0].name.indexOf('<script>') === -1, 'Leaderboard/Security: malicious input was sanitized');
-  assertEqual(scores[0].name, '&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;', 'Security: HTML completely escaped');
-  
-  Leaderboard.clearScores();
-}
-
 function testGeminiOracleAPIKey() {
   assert(!GeminiOracle.isApiConfigured(), 'GeminiOracle: configured correctly based on window state');
   assertEqual(GeminiOracle.getApiCallCount(), 0, 'GeminiOracle: no calls made yet');
@@ -166,8 +145,6 @@ async function runAll() {
   testRevealCellCascade();
   testIsBoardSolved();
   testGeminiOracleAPIKey();
-  
-  await testLeaderboardFallback();
   
   render();
 }

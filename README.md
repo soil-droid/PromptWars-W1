@@ -48,7 +48,7 @@ Play **with** an AI oracle, not against one.
 │   ├── game.js         Core Minesweeper logic
 │   ├── gemini.js       Gemini API integration
 │   ├── ui.js           DOM rendering & accessibility
-│   └── firebase.js     Leaderboard (localStorage stub)
+│   └── firebase.js     Firebase Realtime Database leaderboard + Analytics
 └── tests/
     ├── index.html      Test runner
     └── gemini.test.js  Unit tests

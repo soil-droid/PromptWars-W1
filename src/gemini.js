@@ -18,8 +18,9 @@ const _cache = new Map();
  * @returns {string|null} The API key or null if not configured.
  */
 function _getApiKey() {
-  return typeof GEMINI_API_KEY !== 'undefined' && GEMINI_API_KEY !== 'YOUR_API_KEY_HERE'
-    ? GEMINI_API_KEY
+  if (typeof CONFIG === 'undefined' || !CONFIG.GEMINI_API_KEY) return null;
+  return CONFIG.GEMINI_API_KEY !== 'REPLACE_WITH_YOUR_GEMINI_API_KEY'
+    ? CONFIG.GEMINI_API_KEY
     : null;
 }
 

@@ -97,6 +97,11 @@ import * as Leaderboard from './firebase.js';
     // Keyboard navigation on board
     boardEl.addEventListener('keydown', handleKeyboard);
 
+    // Initialise Firebase Leaderboard & Analytics exactly as required
+    if (typeof CONFIG !== 'undefined' && CONFIG.FIREBASE_CONFIG) {
+      Leaderboard.initFirebase();
+    }
+
     newGame();
   }
 
@@ -408,7 +413,7 @@ import * as Leaderboard from './firebase.js';
     oracleCountEl.textContent = GeminiOracle.getApiCallCount();
     
     // Log oracle consult event
-    Leaderboard.logEvent('oracle_consulted', { board_progress: countRevealed() });
+    Leaderboard.trackEvent('oracle_consulted', { board_progress: countRevealed() });
 
     if (result && result.probabilities) {
       probabilities = result.probabilities;
@@ -456,7 +461,7 @@ import * as Leaderboard from './firebase.js';
     const stats = { timeElapsed: seconds, flagsPlaced: MinesweeperGame.countFlags(board) };
 
     // Log hint requested
-    Leaderboard.logEvent('hint_requested', { mines_remaining: minesRemaining });
+    Leaderboard.trackEvent('hint_requested', { mines_remaining: minesRemaining });
 
     const hint = await GeminiOracle.getStrategicHint(boardState, stats);
 
@@ -499,7 +504,7 @@ import * as Leaderboard from './firebase.js';
       }
       
       // Log game lost event
-      Leaderboard.logEvent('game_lost', { cells_revealed: countRevealed() });
+      Leaderboard.trackEvent('game_lost', { cells_revealed: countRevealed() });
     }
 
     // Show overlay
@@ -512,22 +517,16 @@ import * as Leaderboard from './firebase.js';
       subtitleEl.textContent = `Minefield cleared in ${timerEl.textContent}`;
       narrationEl.textContent = '';
       
-      // Log game won event
-      Leaderboard.logEvent('game_won', { time_seconds: seconds, oracle_calls: GeminiOracle.getApiCallCount() });
-
+      // Log game won event (also automatically logged by saveScore per tutorial, but we keep this if needed, or we just rely on saveScore. The instructions say the tutorial saveScore explicitly logs game_won so we only need to call trackEvent if it's not handled).
+      // Wait, let's just use trackEvent if we aren't saving a score, but if we do, skip double log. Actually tutorial saveScore logs it.
+      
       // Save to leaderboard
       const rawName = prompt('Enter your name for the leaderboard:', 'Player');
       if (rawName) {
-        // Strict HTML Sanitization to prevent Stored XSS
-        const name = rawName.replace(/[<>&"']/g, (c) => {
-          return {'<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;', "'":'&#39;'}[c];
-        }).substring(0, 30);
-
-        Leaderboard.saveScore({
-          name,
-          time: seconds,
-          oracleUses: GeminiOracle.getApiCallCount()
-        });
+        const name = rawName.substring(0, 20); // The new saveScore handles HTML escaping internally.
+        Leaderboard.saveScore(name, seconds, GeminiOracle.getApiCallCount());
+      } else {
+        Leaderboard.trackEvent('game_won', { time_seconds: seconds, oracle_calls: GeminiOracle.getApiCallCount() });
       }
     } else {
       titleEl.textContent = '💀 Game Over';

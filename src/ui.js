@@ -98,8 +98,12 @@ import * as Leaderboard from './firebase.js';
     boardEl.addEventListener('keydown', handleKeyboard);
 
     // Initialise Firebase Leaderboard & Analytics exactly as required
-    if (typeof CONFIG !== 'undefined' && CONFIG.FIREBASE_CONFIG) {
-      Leaderboard.initFirebase();
+    if (typeof CONFIG !== 'undefined' && CONFIG.FIREBASE_CONFIG && CONFIG.FIREBASE_CONFIG.apiKey !== "REPLACE_WITH_FIREBASE_API_KEY") {
+      try {
+        Leaderboard.initFirebase();
+      } catch (e) {
+        console.warn('[Firebase] Initialization aborted due to invalid config.', e);
+      }
     }
 
     newGame();

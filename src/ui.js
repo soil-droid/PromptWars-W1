@@ -406,6 +406,9 @@ import * as Leaderboard from './firebase.js';
 
     isAnalyzing = false;
     oracleCountEl.textContent = GeminiOracle.getApiCallCount();
+    
+    // Log oracle consult event
+    Leaderboard.logEvent('oracle_consulted', { board_progress: countRevealed() });
 
     if (result && result.probabilities) {
       probabilities = result.probabilities;
@@ -452,6 +455,9 @@ import * as Leaderboard from './firebase.js';
     const boardState = MinesweeperGame.boardToAPIFormat(board, minesRemaining);
     const stats = { timeElapsed: seconds, flagsPlaced: MinesweeperGame.countFlags(board) };
 
+    // Log hint requested
+    Leaderboard.logEvent('hint_requested', { mines_remaining: minesRemaining });
+
     const hint = await GeminiOracle.getStrategicHint(boardState, stats);
 
     askOracleBtn.disabled = false;
@@ -491,6 +497,9 @@ import * as Leaderboard from './firebase.js';
         const td = document.getElementById(`cell-${clickedCell.row}-${clickedCell.col}`);
         if (td) td.classList.add('mine-hit');
       }
+      
+      // Log game lost event
+      Leaderboard.logEvent('game_lost', { cells_revealed: countRevealed() });
     }
 
     // Show overlay
@@ -502,6 +511,9 @@ import * as Leaderboard from './firebase.js';
       titleEl.style.color = '#1D9E75';
       subtitleEl.textContent = `Minefield cleared in ${timerEl.textContent}`;
       narrationEl.textContent = '';
+      
+      // Log game won event
+      Leaderboard.logEvent('game_won', { time_seconds: seconds, oracle_calls: GeminiOracle.getApiCallCount() });
 
       // Save to leaderboard
       const rawName = prompt('Enter your name for the leaderboard:', 'Player');

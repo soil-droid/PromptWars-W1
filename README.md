@@ -19,6 +19,16 @@ Play **with** an AI oracle, not against one.
 3. **Add** your [Gemini API key](https://aistudio.google.com/app/apikey) to `config.js`
 4. **Open** `index.html` in a modern browser — no build step required
 
+## Google Services
+
+1. Google Gemini 2.0 Flash API — Core game AI Oracle and reasoning
+2. Firebase Realtime Database — Read/write with `onValue` listeners for the leaderboard
+3. Firebase Analytics — Custom event logging
+4. Firebase Hosting / Cloud Storage — Asset and config storage
+5. Google Cloud Run — Production deployment, auto-scaling, HTTPS
+6. Google Artifact Registry — Docker image storage
+7. Google Cloud Build — CI/CD container builds
+
 ## Controls
 
 | Action | Mouse | Keyboard |

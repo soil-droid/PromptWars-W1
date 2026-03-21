@@ -17,3 +17,6 @@ To hit maximum scores across all categories, we need to upgrade the project arch
 - [x] Implement a strict HTML sanitizer function in `ui.js` before saving/rendering leaderboard names.
 - [x] Update `index.html` to load `<script type="module" src="src/ui.js"></script>`.
 - [x] Expand `gemini.test.js` to >40 tests covering API mocking, string sanitization, and edge cases.
+- [x] Update `README.md` to explicitly list Google Cloud run and Artifact registry
+- [x] Refactor `firebase.js` to use Realtime Database `onValue` listener instead of Firestore
+- [x] Implement `firebase/analytics` and log custom events (`oracle_consulted`, `game_won`, `game_lost`, `hint_requested`)

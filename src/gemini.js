@@ -2,200 +2,216 @@
 // gemini.js — Google Gemini 2.0 Flash Integration
 // ═══════════════════════════════════════════════════════════
 
-const GeminiOracle = (() => {
-  'use strict';
+import { GoogleGenerativeAI } from 'https://esm.run/@google/generative-ai';
 
-  const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-  const DEBOUNCE_MS = 800;
+const DEBOUNCE_MS = 800;
 
-  let _apiCallCount = 0;
-  let _lastCallTime = 0;
-  let _pendingCall = null;
-  const _cache = new Map();
+let _apiCallCount = 0;
+let _lastCallTime = 0;
+let _pendingCall = null;
+const _cache = new Map();
 
-  // ── Helpers ────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────
 
-  function _getApiKey() {
-    return typeof GEMINI_API_KEY !== 'undefined' && GEMINI_API_KEY !== 'YOUR_API_KEY_HERE'
-      ? GEMINI_API_KEY
-      : null;
+/**
+ * Retrieves the Gemini API key from the global object.
+ * @returns {string|null} The API key or null if not configured.
+ */
+function _getApiKey() {
+  return typeof GEMINI_API_KEY !== 'undefined' && GEMINI_API_KEY !== 'YOUR_API_KEY_HERE'
+    ? GEMINI_API_KEY
+    : null;
+}
+
+/**
+ * Creates a simple hash of the board state for caching.
+ * @param {Object} obj - The object to hash.
+ * @returns {string} The computed hash string.
+ */
+function _hashState(obj) {
+  const str = JSON.stringify(obj);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const chr = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + chr;
+    hash |= 0;
   }
+  return hash.toString(36);
+}
 
-  function _hashState(obj) {
-    const str = JSON.stringify(obj);
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const chr = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + chr;
-      hash |= 0;
-    }
-    return hash.toString(36);
-  }
+/**
+ * Helper to call the official Gemini SDK.
+ * @param {string} userPrompt - The user prompt.
+ * @param {string} systemInstruction - The system instruction.
+ * @returns {Promise<string|null>} The generated text.
+ */
+async function _callGemini(userPrompt, systemInstruction) {
+  const apiKey = _getApiKey();
+  if (!apiKey) return null;
 
-  async function _callGemini(userPrompt, systemInstruction) {
-    const apiKey = _getApiKey();
-    if (!apiKey) return null;
-
-    const body = {
-      system_instruction: {
-        parts: [{ text: systemInstruction }]
-      },
-      contents: [{
-        parts: [{ text: userPrompt }]
-      }],
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash",
+      systemInstruction: systemInstruction,
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 4096
+        maxOutputTokens: 4096,
       }
-    };
+    });
 
+    const result = await model.generateContent(userPrompt);
+    const text = result.response.text();
+    if (!text) return null;
+    
+    _apiCallCount++;
+    return text;
+  } catch (err) {
+    console.warn('[Gemini] SDK error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Extracts and parses JSON from markdown fences or raw text.
+ * @param {string} text - The raw text from the AI.
+ * @returns {Object|null} Parsed JSON or null.
+ */
+function _extractJSON(text) {
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const jsonStr = fenceMatch ? fenceMatch[1].trim() : text.trim();
+  try {
+    return JSON.parse(jsonStr);
+  } catch {
     try {
-      const res = await fetch(`${API_URL}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      if (!res.ok) {
-        console.warn('[Gemini] API error:', res.status, res.statusText);
-        return null;
-      }
-
-      const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) return null;
-
-      _apiCallCount++;
-      return text;
-    } catch (err) {
-      console.warn('[Gemini] Network error:', err.message);
+      return JSON.parse(jsonStr.replace(/'/g, '"'));
+    } catch {
+      console.warn('[Gemini] Could not parse JSON:', jsonStr.substring(0, 200));
       return null;
     }
   }
+}
 
-  function _extractJSON(text) {
-    // Try to extract JSON from markdown code fences or raw text
-    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    const jsonStr = fenceMatch ? fenceMatch[1].trim() : text.trim();
-    try {
-      return JSON.parse(jsonStr);
-    } catch {
-      // Try fixing single quotes
-      try {
-        return JSON.parse(jsonStr.replace(/'/g, '"'));
-      } catch {
-        console.warn('[Gemini] Could not parse JSON:', jsonStr.substring(0, 200));
-        return null;
-      }
-    }
+// ── 1. Board Probability Analysis ─────────────────────
+
+/**
+ * Analyzes the board state and returns probabilities for each hidden cell.
+ * Features caching and debouncing.
+ * @param {Object} boardState - The exact API-formatted board state.
+ * @returns {Promise<Object|null>} Resolution with probabilities array.
+ */
+export async function analyzeBoardProbabilities(boardState) {
+  const hash = _hashState(boardState);
+
+  if (_cache.has(hash)) {
+    return _cache.get(hash);
   }
 
-  // ── 1. Board Probability Analysis ─────────────────────
+  const now = Date.now();
+  const timeSinceLast = now - _lastCallTime;
 
-  async function analyzeBoardProbabilities(boardState) {
-    const hash = _hashState(boardState);
-
-    // Return cached result if identical board state
-    if (_cache.has(hash)) {
-      return _cache.get(hash);
-    }
-
-    // Debounce — cancel pending and schedule new one
-    const now = Date.now();
-    const timeSinceLast = now - _lastCallTime;
-
-    if (timeSinceLast < DEBOUNCE_MS) {
-      return new Promise((resolve) => {
-        if (_pendingCall) clearTimeout(_pendingCall);
-        _pendingCall = setTimeout(async () => {
-          _pendingCall = null;
-          const result = await _doAnalyze(boardState, hash);
-          resolve(result);
-        }, DEBOUNCE_MS - timeSinceLast);
-      });
-    }
-
-    return _doAnalyze(boardState, hash);
+  if (timeSinceLast < DEBOUNCE_MS) {
+    return new Promise((resolve) => {
+      if (_pendingCall) clearTimeout(_pendingCall);
+      _pendingCall = setTimeout(async () => {
+        _pendingCall = null;
+        const result = await _doAnalyze(boardState, hash);
+        resolve(result);
+      }, DEBOUNCE_MS - timeSinceLast);
+    });
   }
 
-  async function _doAnalyze(boardState, hash) {
-    _lastCallTime = Date.now();
+  return _doAnalyze(boardState, hash);
+}
 
-    const systemPrompt = `You are a Minesweeper probability expert. Given this board state, calculate the probability (0.0 to 1.0) that each hidden cell contains a mine using constraint satisfaction logic. Return ONLY valid JSON: { "probabilities": [ { "row": N, "col": N, "prob": 0.0-1.0, "reasoning": "one sentence" } ] } for ALL hidden cells. Do not include any text outside the JSON.`;
+async function _doAnalyze(boardState, hash) {
+  _lastCallTime = Date.now();
 
-    const userPrompt = `Analyze this Minesweeper board:\n${JSON.stringify(boardState, null, 2)}`;
+  const systemPrompt = `You are a Minesweeper probability expert. Given this board state, calculate the probability (0.0 to 1.0) that each hidden cell contains a mine using constraint satisfaction logic. Return ONLY valid JSON: { "probabilities": [ { "row": N, "col": N, "prob": 0.0-1.0, "reasoning": "one sentence" } ] } for ALL hidden cells. Do not include any text outside the JSON.`;
+  const userPrompt = `Analyze this Minesweeper board:\n${JSON.stringify(boardState, null, 2)}`;
 
-    const rawText = await _callGemini(userPrompt, systemPrompt);
-    if (!rawText) return null;
+  const rawText = await _callGemini(userPrompt, systemPrompt);
+  if (!rawText) return null;
 
-    const parsed = _extractJSON(rawText);
-    if (!parsed || !Array.isArray(parsed.probabilities)) return null;
+  const parsed = _extractJSON(rawText);
+  if (!parsed || !Array.isArray(parsed.probabilities)) return null;
 
-    // Validate & clamp probabilities
-    const result = {
-      probabilities: parsed.probabilities.map(p => ({
-        row: parseInt(p.row, 10),
-        col: parseInt(p.col, 10),
-        prob: Math.max(0, Math.min(1, parseFloat(p.prob) || 0.5)),
-        reasoning: String(p.reasoning || '')
-      }))
-    };
+  const result = {
+    probabilities: parsed.probabilities.map(p => ({
+      row: parseInt(p.row, 10),
+      col: parseInt(p.col, 10),
+      prob: Math.max(0, Math.min(1, parseFloat(p.prob) || 0.5)),
+      reasoning: String(p.reasoning || '')
+    }))
+  };
 
-    _cache.set(hash, result);
-
-    // Keep cache from growing unbounded
-    if (_cache.size > 50) {
-      const firstKey = _cache.keys().next().value;
-      _cache.delete(firstKey);
-    }
-
-    return result;
+  _cache.set(hash, result);
+  if (_cache.size > 50) {
+    const firstKey = _cache.keys().next().value;
+    _cache.delete(firstKey);
   }
 
-  // ── 2. Strategic Hint ─────────────────────────────────
+  return result;
+}
 
-  async function getStrategicHint(boardState, playerStats) {
-    const systemPrompt = `You are a Minesweeper strategy advisor. Given the board state and player statistics, recommend the single best move. Return ONLY valid JSON: { "row": N, "col": N, "action": "reveal|flag", "reasoning": "2-3 sentences explaining why this is the best move" }. Do not include any text outside the JSON.`;
+// ── 2. Strategic Hint ─────────────────────────────────
 
-    const userPrompt = `Board state:\n${JSON.stringify(boardState, null, 2)}\n\nPlayer stats:\n${JSON.stringify(playerStats, null, 2)}`;
+/**
+ * Generates a focused strategic hint for the player.
+ * @param {Object} boardState - The current board state.
+ * @param {Object} playerStats - Current game stats (time, flags).
+ * @returns {Promise<{row: number, col: number, action: string, reasoning: string}|null>} Hint object.
+ */
+export async function getStrategicHint(boardState, playerStats) {
+  const systemPrompt = `You are a Minesweeper strategy advisor. Given the board state and player statistics, recommend the single best move. Return ONLY valid JSON: { "row": N, "col": N, "action": "reveal|flag", "reasoning": "2-3 sentences explaining why this is the best move" }. Do not include any text outside the JSON.`;
+  const userPrompt = `Board state:\n${JSON.stringify(boardState, null, 2)}\n\nPlayer stats:\n${JSON.stringify(playerStats, null, 2)}`;
 
-    const rawText = await _callGemini(userPrompt, systemPrompt);
-    if (!rawText) return null;
+  const rawText = await _callGemini(userPrompt, systemPrompt);
+  if (!rawText) return null;
 
-    const parsed = _extractJSON(rawText);
-    if (!parsed || typeof parsed.row === 'undefined') return null;
-
-    return {
-      row: parseInt(parsed.row, 10),
-      col: parseInt(parsed.col, 10),
-      action: parsed.action || 'reveal',
-      reasoning: String(parsed.reasoning || 'No reasoning available.')
-    };
-  }
-
-  // ── 3. Death Narration ────────────────────────────────
-
-  async function generateDeathNarration(boardState, clickedCell, gameStats) {
-    const systemPrompt = `You are a dramatic narrator for a Minesweeper game. Write exactly 2 sentences narrating the player's defeat in an epic, slightly dark-humoured style. Reference specific game details like how long they played or how close they were to winning. Return ONLY the 2 sentences as plain text, no JSON.`;
-
-    const userPrompt = `The player clicked on cell (row ${clickedCell.row}, col ${clickedCell.col}) and hit a mine!\n\nGame stats: ${JSON.stringify(gameStats)}\n\nBoard state: ${JSON.stringify(boardState)}`;
-
-    const rawText = await _callGemini(userPrompt, systemPrompt);
-    return rawText ? rawText.trim() : 'The oracle falls silent. The mines claim another soul.';
-  }
-
-  // ── Public API ─────────────────────────────────────────
-
-  function getApiCallCount() { return _apiCallCount; }
-  function isApiConfigured() { return !!_getApiKey(); }
-  function clearCache() { _cache.clear(); }
+  const parsed = _extractJSON(rawText);
+  if (!parsed || typeof parsed.row === 'undefined') return null;
 
   return {
-    analyzeBoardProbabilities,
-    getStrategicHint,
-    generateDeathNarration,
-    getApiCallCount,
-    isApiConfigured,
-    clearCache
+    row: parseInt(parsed.row, 10),
+    col: parseInt(parsed.col, 10),
+    action: parsed.action || 'reveal',
+    reasoning: String(parsed.reasoning || 'No reasoning available.')
   };
-})();
+}
+
+// ── 3. Death Narration ────────────────────────────────
+
+/**
+ * Generates a dramatic two-sentence narration when the player hits a mine.
+ * @param {Object} boardState - The board state at time of death.
+ * @param {Object} clickedCell - The coordinates of the fatal click.
+ * @param {Object} gameStats - Time and clearing stats.
+ * @returns {Promise<string>} Two-sentence narration text.
+ */
+export async function generateDeathNarration(boardState, clickedCell, gameStats) {
+  const systemPrompt = `You are a dramatic narrator for a Minesweeper game. Write exactly 2 sentences narrating the player's defeat in an epic, slightly dark-humoured style. Reference specific game details like how long they played or how close they were to winning. Return ONLY the 2 sentences as plain text, no JSON.`;
+  const userPrompt = `The player clicked on cell (row ${clickedCell.row}, col ${clickedCell.col}) and hit a mine!\n\nGame stats: ${JSON.stringify(gameStats)}\n\nBoard state: ${JSON.stringify(boardState)}`;
+
+  const rawText = await _callGemini(userPrompt, systemPrompt);
+  return rawText ? rawText.trim() : 'The oracle falls silent. The mines claim another soul.';
+}
+
+// ── Public API ─────────────────────────────────────────
+
+/**
+ * Returns the total number of API calls made.
+ * @returns {number}
+ */
+export function getApiCallCount() { return _apiCallCount; }
+
+/**
+ * Checks if the API key is configured.
+ * @returns {boolean}
+ */
+export function isApiConfigured() { return !!_getApiKey(); }
+
+/**
+ * Clears the internal response cache.
+ */
+export function clearCache() { _cache.clear(); }

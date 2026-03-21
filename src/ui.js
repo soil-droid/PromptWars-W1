@@ -2,10 +2,11 @@
 // ui.js — DOM Rendering, Accessibility & Game Controller
 // ═══════════════════════════════════════════════════════════
 
-const GameUI = (() => {
-  'use strict';
+import * as MinesweeperGame from './game.js';
+import * as GeminiOracle from './gemini.js';
+import * as Leaderboard from './firebase.js';
 
-  // ── Configuration ──────────────────────────────────────
+// ── Configuration ──────────────────────────────────────
   const ROWS = 16;
   const COLS = 16;
   const MINES = 40;
@@ -503,8 +504,13 @@ const GameUI = (() => {
       narrationEl.textContent = '';
 
       // Save to leaderboard
-      const name = prompt('Enter your name for the leaderboard:', 'Player');
-      if (name) {
+      const rawName = prompt('Enter your name for the leaderboard:', 'Player');
+      if (rawName) {
+        // Strict HTML Sanitization to prevent Stored XSS
+        const name = rawName.replace(/[<>&"']/g, (c) => {
+          return {'<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;', "'":'&#39;'}[c];
+        }).substring(0, 30);
+
         Leaderboard.saveScore({
           name,
           time: seconds,
@@ -539,9 +545,5 @@ const GameUI = (() => {
     return count;
   }
 
-  // ── Public API ─────────────────────────────────────────
-  return { init };
-})();
-
 // Boot up when DOM is ready
-document.addEventListener('DOMContentLoaded', GameUI.init);
+document.addEventListener('DOMContentLoaded', init);

@@ -4,7 +4,7 @@
 
 import { GoogleGenerativeAI } from 'https://esm.run/@google/generative-ai';
 
-const DEBOUNCE_MS = 800;
+const DEBOUNCE_MS = 3000;
 
 let _apiCallCount = 0;
 let _lastCallTime = 0;

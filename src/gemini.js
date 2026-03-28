@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// gemini.js — Google Gemini 2.0 Flash Integration
+// gemini.js — Google Gemini 2.5 Flash Integration
 // ═══════════════════════════════════════════════════════════
 
 import { GoogleGenerativeAI } from 'https://cdn.jsdelivr.net/npm/@google/generative-ai/+esm';
@@ -53,7 +53,7 @@ async function _callGemini(userPrompt, systemInstruction) {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       systemInstruction: systemInstruction,
       generationConfig: {
         temperature: 0.2,

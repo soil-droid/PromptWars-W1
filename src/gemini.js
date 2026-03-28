@@ -2,7 +2,7 @@
 // gemini.js — Google Gemini 2.0 Flash Integration
 // ═══════════════════════════════════════════════════════════
 
-import { GoogleGenerativeAI } from 'https://esm.run/@google/generative-ai';
+import { GoogleGenerativeAI } from 'https://cdn.jsdelivr.net/npm/@google/generative-ai/+esm';
 
 const DEBOUNCE_MS = 3000;
 

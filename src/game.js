@@ -1,12 +1,17 @@
-// ═══════════════════════════════════════════════════════════
-// game.js — Core Minesweeper Logic (Pure Functions)
-// ═══════════════════════════════════════════════════════════
+/**
+ * @file game.js
+ * @description Pure Minesweeper game logic: board generation, cell reveal with BFS
+ *              cascade, flagging, chord reveal, win detection, and board serialisation.
+ *              All functions are side-effect-free except for mutating the board array.
+ * @module game
+ */
 
-/** @constant {number} */
+// ─── Cell State Constants ──────────────────────────────────────────────────────
+/** @constant {number} CELL_HIDDEN - Cell has not been revealed or flagged. */
 export const CELL_HIDDEN = 0;
-/** @constant {number} */
+/** @constant {number} CELL_REVEALED - Cell has been revealed by the player. */
 export const CELL_REVEALED = 1;
-/** @constant {number} */
+/** @constant {number} CELL_FLAGGED - Cell has been flagged by the player. */
 export const CELL_FLAGGED = 2;
 
 // ── Board Generation ───────────────────────────────────

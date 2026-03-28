@@ -1,34 +1,48 @@
-// ═══════════════════════════════════════════════════════════
-// ui.js — DOM Rendering, Accessibility & Game Controller
-// ═══════════════════════════════════════════════════════════
+/**
+ * @file ui.js
+ * @description DOM rendering, accessibility management, and game controller.
+ *              Wires Firebase Analytics events for all player interactions,
+ *              manages the Gemini Oracle heatmap and hint system, and handles
+ *              keyboard + mouse input with full ARIA support.
+ * @module ui
+ */
 
 import * as MinesweeperGame from './game.js';
 import * as GeminiOracle from './gemini.js';
 import * as Leaderboard from './firebase.js';
 
-// ── Configuration ──────────────────────────────────────
-  const ROWS = 16;
-  const COLS = 16;
-  const MINES = 40;
+// ─── Constants ────────────────────────────────────────────────────────────────
+const ROWS = 16;
+const COLS = 16;
+const MINES = 40;
+const REVEAL_STAGGER_MS = 15;
+const HINT_PULSE_MS = 2000;
+const GAME_OVER_DELAY_MS = 300;
 
-  // ── State ──────────────────────────────────────────────
-  let board = null;
-  let gameStarted = false;
-  let gameOver = false;
-  let gameWon = false;
-  let firstClick = true;
-  let timerInterval = null;
-  let seconds = 0;
-  let heatmapVisible = false;
-  let probabilities = null;
-  let focusedRow = 0;
-  let focusedCol = 0;
-  let isAnalyzing = false;
-  let lastReasoning = '';
+// ─── State ────────────────────────────────────────────────────────────────────
+let board = null;
+let gameStarted = false;
+let gameOver = false;
+let gameWon = false;
+let firstClick = true;
+let timerInterval = null;
+let seconds = 0;
+let heatmapVisible = false;
+let probabilities = null;
+let focusedRow = 0;
+let focusedCol = 0;
+let isAnalyzing = false;
+let lastReasoning = '';
 
-  // ── Color Helpers ──────────────────────────────────────
+// ─── Color Helpers ────────────────────────────────────────────────────────────
 
-  function probToColor(prob) {
+/**
+ * Maps a mine probability value to an RGB colour string.
+ * Interpolates green→yellow→red across the 0→1 range.
+ * @param {number} prob - Probability value between 0 and 1.
+ * @returns {string} CSS rgb() colour string.
+ */
+function probToColor(prob) {
     // #1D9E75 (safe/green) → #E8C841 (mid/yellow) → #E24B4A (danger/red)
     const r0 = 0x1D, g0 = 0x9E, b0 = 0x75;
     const r1 = 0xE8, g1 = 0xC8, b1 = 0x41;
@@ -49,7 +63,12 @@ import * as Leaderboard from './firebase.js';
     return `rgb(${r}, ${g}, ${b})`;
   }
 
-  function probToGlow(prob) {
+/**
+ * Computes a CSS box-shadow glow string proportional to mine probability.
+ * @param {number} prob - Probability value between 0 and 1.
+ * @returns {string} CSS box-shadow value string.
+ */
+function probToGlow(prob) {
     const color = probToColor(prob);
     const intensity = 0.15 + prob * 0.35;
     return `0 0 ${8 + prob * 12}px rgba(${prob > 0.5 ? '226,75,74' : '29,158,117'}, ${intensity})`;
@@ -68,15 +87,19 @@ import * as Leaderboard from './firebase.js';
     8: '#A1887F'
   };
 
-  // ── DOM References ─────────────────────────────────────
+// ─── DOM References ───────────────────────────────────────────────────────────
+let boardEl, mineCountEl, timerEl, oracleCountEl, confidenceEl;
+let reasoningEl, heatmapBtn, askOracleBtn, gameOverOverlay;
+let narrationEl, statusEl;
 
-  let boardEl, mineCountEl, timerEl, oracleCountEl, confidenceEl;
-  let reasoningEl, heatmapBtn, askOracleBtn, gameOverOverlay;
-  let narrationEl, statusEl;
+// ─── Initialise ───────────────────────────────────────────────────────────────
 
-  // ── Initialise ─────────────────────────────────────────
-
-  function init() {
+/**
+ * Bootstraps the application: queries DOM elements, attaches event listeners,
+ * initialises Firebase (if configured), and starts the first game.
+ * @returns {void}
+ */
+function init() {
     boardEl = document.getElementById('game-board');
     mineCountEl = document.getElementById('mine-count');
     timerEl = document.getElementById('timer');
@@ -109,9 +132,14 @@ import * as Leaderboard from './firebase.js';
     newGame();
   }
 
-  // ── New Game ───────────────────────────────────────────
+// ─── New Game ─────────────────────────────────────────────────────────────────
 
-  function newGame() {
+/**
+ * Resets all game state and re-renders a fresh board.
+ * Clears the timer, probabilities cache, and game-over overlay.
+ * @returns {void}
+ */
+function newGame() {
     clearInterval(timerInterval);
     seconds = 0;
     gameStarted = false;
@@ -152,9 +180,14 @@ import * as Leaderboard from './firebase.js';
     focusCell(0, 0);
   }
 
-  // ── Timer ──────────────────────────────────────────────
+// ─── Timer ────────────────────────────────────────────────────────────────────
 
-  function startTimer() {
+/**
+ * Starts the game timer interval, updating the display every second.
+ * No-ops if timer is already running.
+ * @returns {void}
+ */
+function startTimer() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
       seconds++;
@@ -164,16 +197,25 @@ import * as Leaderboard from './firebase.js';
     }, 1000);
   }
 
-  // ── Mine Counter ───────────────────────────────────────
+// ─── Mine Counter ─────────────────────────────────────────────────────────────
 
-  function updateMineCounter() {
+/**
+ * Recalculates and displays the remaining unflagged mine count.
+ * @returns {void}
+ */
+function updateMineCounter() {
     const flags = MinesweeperGame.countFlags(board);
     mineCountEl.textContent = String(MINES - flags).padStart(3, '0');
   }
 
-  // ── Render Board ───────────────────────────────────────
+// ─── Render Board ─────────────────────────────────────────────────────────────
 
-  function renderBoard() {
+/**
+ * Rebuilds the entire board table in the DOM from current state.
+ * Called on new game; incremental updates use refreshCell().
+ * @returns {void}
+ */
+function renderBoard() {
     boardEl.innerHTML = '';
     const table = document.createElement('table');
     table.setAttribute('role', 'grid');
@@ -192,7 +234,13 @@ import * as Leaderboard from './firebase.js';
     boardEl.appendChild(table);
   }
 
-  function createCell(r, c) {
+/**
+ * Creates a single <td> board cell with event listeners and initial DOM state.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @returns {HTMLTableCellElement} The configured cell element.
+ */
+function createCell(r, c) {
     const cell = board[r][c];
     const td = document.createElement('td');
     td.setAttribute('role', 'gridcell');
@@ -210,7 +258,14 @@ import * as Leaderboard from './firebase.js';
     return td;
   }
 
-  function updateCellDOM(td, cell) {
+/**
+ * Updates an existing cell element's appearance to match the current cell state.
+ * Applies revealed/flagged/hidden styles and optional heatmap overlay.
+ * @param {HTMLTableCellElement} td - The cell DOM element.
+ * @param {Object} cell - The cell data object.
+ * @returns {void}
+ */
+function updateCellDOM(td, cell) {
     td.className = 'cell';
     td.textContent = '';
 
@@ -256,12 +311,22 @@ import * as Leaderboard from './firebase.js';
     }
   }
 
-  function refreshCell(r, c) {
+/**
+ * Re-renders a single cell by ID without rebuilding the whole board.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @returns {void}
+ */
+function refreshCell(r, c) {
     const td = document.getElementById(`cell-${r}-${c}`);
     if (td) updateCellDOM(td, board[r][c]);
   }
 
-  function refreshAllCells() {
+/**
+ * Re-renders every cell on the board. Called when heatmap is toggled.
+ * @returns {void}
+ */
+function refreshAllCells() {
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         refreshCell(r, c);
@@ -269,9 +334,17 @@ import * as Leaderboard from './firebase.js';
     }
   }
 
-  // ── Cell Click Handling ────────────────────────────────
+// ─── Cell Click Handling ──────────────────────────────────────────────────────
 
-  function handleCellClick(r, c, e) {
+/**
+ * Routes a mouse event on a cell to the appropriate handler.
+ * Left click → reveal, right/ctrl+click → flag, middle/shift+click → chord.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @param {MouseEvent} e - The originating mouse event.
+ * @returns {void}
+ */
+function handleCellClick(r, c, e) {
     if (gameOver) return;
     e.preventDefault();
 
@@ -289,7 +362,15 @@ import * as Leaderboard from './firebase.js';
     }
   }
 
-  function handleReveal(r, c) {
+/**
+ * Handles a reveal action on the cell at (r, c).
+ * On first click: generates the board with a safe zone, starts timer,
+ * logs game_start and first_click analytics events, and records a session.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @returns {void}
+ */
+function handleReveal(r, c) {
     if (gameOver || board[r][c].revealed || board[r][c].flagged) return;
 
     if (firstClick) {
@@ -298,6 +379,9 @@ import * as Leaderboard from './firebase.js';
       firstClick = false;
       gameStarted = true;
       startTimer();
+      Leaderboard.trackEvent('game_start', { board_size: `${ROWS}x${COLS}`, mines: MINES });
+      Leaderboard.trackEvent('first_click', { row: r, col: c });
+      Leaderboard.trackSession();
     }
 
     const result = MinesweeperGame.revealCell(board, r, c);
@@ -306,6 +390,9 @@ import * as Leaderboard from './firebase.js';
       endGame(false, { row: r, col: c });
       return;
     }
+
+    // Log cell_revealed for the directly clicked cell
+    Leaderboard.trackEvent('cell_revealed', { row: r, col: c, was_safe: true });
 
     // Refresh revealed cells with staggered animation
     result.revealedCells.forEach((cell, i) => {
@@ -316,7 +403,7 @@ import * as Leaderboard from './firebase.js';
           updateCellDOM(td, board[cell.row][cell.col]);
           setTimeout(() => td.classList.remove('revealing'), 300);
         }
-      }, i * 15);
+      }, i * REVEAL_STAGGER_MS);
     });
 
     if (MinesweeperGame.isBoardSolved(board)) {
@@ -328,14 +415,29 @@ import * as Leaderboard from './firebase.js';
     triggerAnalysis();
   }
 
-  function handleFlag(r, c) {
+/**
+ * Toggles a flag on the cell at (r, c) and logs a flag_placed analytics event.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @returns {void}
+ */
+function handleFlag(r, c) {
     if (gameOver || board[r][c].revealed) return;
     MinesweeperGame.toggleFlag(board, r, c);
     refreshCell(r, c);
     updateMineCounter();
+    const totalFlags = MinesweeperGame.countFlags(board);
+    Leaderboard.trackEvent('flag_placed', { flags_total: totalFlags });
   }
 
-  function handleChord(r, c) {
+/**
+ * Performs a chord-reveal around a numbered cell (r, c).
+ * Ends the game if a mine is hit; triggers analysis on new reveals.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @returns {void}
+ */
+function handleChord(r, c) {
     if (gameOver) return;
     const result = MinesweeperGame.chordReveal(board, r, c);
     if (result.hitMine) {
@@ -352,9 +454,15 @@ import * as Leaderboard from './firebase.js';
     if (result.revealedCells.length > 0) triggerAnalysis();
   }
 
-  // ── Keyboard Navigation ────────────────────────────────
+// ─── Keyboard Navigation ──────────────────────────────────────────────────────
 
-  function handleKeyboard(e) {
+/**
+ * Handles keyboard events on the game board for arrow-key navigation,
+ * reveal (Enter/Space), flag (F), and chord (C) actions.
+ * @param {KeyboardEvent} e - The keyboard event.
+ * @returns {void}
+ */
+function handleKeyboard(e) {
     if (gameOver) return;
 
     const key = e.key;
@@ -388,7 +496,13 @@ import * as Leaderboard from './firebase.js';
     }
   }
 
-  function focusCell(r, c) {
+/**
+ * Moves keyboard focus to the cell at (r, c), resetting all other tabIndexes.
+ * @param {number} r - Row index.
+ * @param {number} c - Column index.
+ * @returns {void}
+ */
+function focusCell(r, c) {
     // Reset all tabindexes
     const allCells = boardEl.querySelectorAll('td');
     allCells.forEach(td => td.tabIndex = -1);
@@ -400,9 +514,15 @@ import * as Leaderboard from './firebase.js';
     }
   }
 
-  // ── Gemini Analysis ────────────────────────────────────
+// ─── Gemini Analysis ──────────────────────────────────────────────────────────
 
-  async function triggerAnalysis() {
+/**
+ * Requests a board probability analysis from the Gemini Oracle.
+ * Logs an oracle_consulted analytics event and updates the confidence meter.
+ * Debounces calls via the GeminiOracle module.
+ * @returns {Promise<void>}
+ */
+async function triggerAnalysis() {
     if (!GeminiOracle.isApiConfigured() || isAnalyzing) return;
 
     isAnalyzing = true;
@@ -415,9 +535,12 @@ import * as Leaderboard from './firebase.js';
 
     isAnalyzing = false;
     oracleCountEl.textContent = GeminiOracle.getApiCallCount();
-    
-    // Log oracle consult event
-    Leaderboard.trackEvent('oracle_consulted', { board_progress: countRevealed() });
+
+    const minesLeft = MINES - MinesweeperGame.countFlags(board);
+    Leaderboard.trackEvent('oracle_consulted', {
+      cells_revealed: countRevealed(),
+      mines_remaining: minesLeft,
+    });
 
     if (result && result.probabilities) {
       probabilities = result.probabilities;
@@ -443,18 +566,28 @@ import * as Leaderboard from './firebase.js';
     }
   }
 
-  // ── Heatmap Toggle ─────────────────────────────────────
+// ─── Heatmap Toggle ───────────────────────────────────────────────────────────
 
-  function toggleHeatmap() {
+/**
+ * Toggles the probability heatmap overlay and logs a heatmap_toggled event.
+ * @returns {void}
+ */
+function toggleHeatmap() {
     heatmapVisible = !heatmapVisible;
     heatmapBtn.textContent = heatmapVisible ? '🔮 Hide Oracle Vision' : '🔮 Show Oracle Vision';
     heatmapBtn.setAttribute('aria-pressed', heatmapVisible);
+    Leaderboard.trackEvent('heatmap_toggled', { visible: heatmapVisible });
     refreshAllCells();
   }
 
-  // ── Ask Oracle ─────────────────────────────────────────
+// ─── Ask Oracle ───────────────────────────────────────────────────────────────
 
-  async function askOracle() {
+/**
+ * Requests a strategic hint from the Gemini Oracle, highlights the suggested
+ * cell, and logs a hint_requested analytics event.
+ * @returns {Promise<void>}
+ */
+async function askOracle() {
     if (!GeminiOracle.isApiConfigured() || gameOver || !gameStarted) return;
 
     askOracleBtn.disabled = true;
@@ -464,8 +597,13 @@ import * as Leaderboard from './firebase.js';
     const boardState = MinesweeperGame.boardToAPIFormat(board, minesRemaining);
     const stats = { timeElapsed: seconds, flagsPlaced: MinesweeperGame.countFlags(board) };
 
-    // Log hint requested
-    Leaderboard.trackEvent('hint_requested', { mines_remaining: minesRemaining });
+    const confidence = probabilities
+      ? Math.round(Math.abs((probabilities.reduce((s, p) => s + p.prob, 0) / probabilities.length) - 0.5) * 200)
+      : 0;
+    Leaderboard.trackEvent('hint_requested', {
+      mines_remaining: minesRemaining,
+      confidence,
+    });
 
     const hint = await GeminiOracle.getStrategicHint(boardState, stats);
 
@@ -479,7 +617,7 @@ import * as Leaderboard from './firebase.js';
       const td = document.getElementById(`cell-${hint.row}-${hint.col}`);
       if (td) {
         td.classList.add('hint-pulse');
-        setTimeout(() => td.classList.remove('hint-pulse'), 2000);
+        setTimeout(() => td.classList.remove('hint-pulse'), HINT_PULSE_MS);
       }
 
       oracleCountEl.textContent = GeminiOracle.getApiCallCount();
@@ -488,9 +626,17 @@ import * as Leaderboard from './firebase.js';
     }
   }
 
-  // ── Game Over ──────────────────────────────────────────
+// ─── Game Over ────────────────────────────────────────────────────────────────
 
-  async function endGame(won, clickedCell = null) {
+/**
+ * Handles end-of-game state for both win and loss scenarios.
+ * Logs game_won or game_lost analytics events, triggers death narration,
+ * and prompts the winner for leaderboard submission.
+ * @param {boolean} won - True if the player won.
+ * @param {{row: number, col: number}|null} [clickedCell=null] - The fatal cell (loss only).
+ * @returns {Promise<void>}
+ */
+async function endGame(won, clickedCell = null) {
     gameOver = true;
     gameWon = won;
     clearInterval(timerInterval);
@@ -507,8 +653,12 @@ import * as Leaderboard from './firebase.js';
         if (td) td.classList.add('mine-hit');
       }
       
-      // Log game lost event
-      Leaderboard.trackEvent('game_lost', { cells_revealed: countRevealed() });
+      Leaderboard.trackEvent('game_lost', {
+        time_seconds: seconds,
+        cells_revealed: countRevealed(),
+        mine_row: clickedCell ? clickedCell.row : -1,
+        mine_col: clickedCell ? clickedCell.col : -1,
+      });
     }
 
     // Show overlay
@@ -547,10 +697,14 @@ import * as Leaderboard from './firebase.js';
       narrationEl.textContent = narration;
     }
 
-    setTimeout(() => gameOverOverlay.classList.add('visible'), 300);
+    setTimeout(() => gameOverOverlay.classList.add('visible'), GAME_OVER_DELAY_MS);
   }
 
-  function countRevealed() {
+/**
+ * Counts the number of non-mine cells currently revealed.
+ * @returns {number} Revealed safe cell count.
+ */
+function countRevealed() {
     let count = 0;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {

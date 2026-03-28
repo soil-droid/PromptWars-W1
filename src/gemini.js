@@ -1,11 +1,28 @@
-// ═══════════════════════════════════════════════════════════
-// gemini.js — Google Gemini 2.0 Flash Integration
-// ═══════════════════════════════════════════════════════════
+/**
+ * @file gemini.js
+ * @description Handles all Google Gemini 2.0 Flash API interactions including
+ *              board probability analysis, strategic hints, and death narration.
+ *              All calls are debounced (3000ms) and cached by board state hash.
+ * @module gemini
+ */
 
+// ─── Imports ──────────────────────────────────────────────────────────────────
 import { GoogleGenerativeAI } from 'https://esm.run/@google/generative-ai';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const DEBOUNCE_MS = 3000;
+const MAX_CACHE_SIZE = 50;
+const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_TEMPERATURE = 0.2;
+const GEMINI_MAX_TOKENS = 4096;
 
+// ─── Structured Logger ────────────────────────────────────────────────────────
+const DEBUG = false;
+const log = (...args) => DEBUG && console.log('[Gemini]', ...args);
+const warn = (...args) => console.warn('[Gemini]', ...args);
+const error = (...args) => console.error('[Gemini]', ...args);
+
+// ─── Module State ─────────────────────────────────────────────────────────────
 let _apiCallCount = 0;
 let _lastCallTime = 0;
 let _pendingCall = null;
@@ -53,12 +70,12 @@ async function _callGemini(userPrompt, systemInstruction) {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash",
-      systemInstruction: systemInstruction,
+      model: GEMINI_MODEL,
+      systemInstruction,
       generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 4096,
-      }
+        temperature: GEMINI_TEMPERATURE,
+        maxOutputTokens: GEMINI_MAX_TOKENS,
+      },
     });
 
     const result = await model.generateContent(userPrompt);
@@ -68,7 +85,7 @@ async function _callGemini(userPrompt, systemInstruction) {
     _apiCallCount++;
     return text;
   } catch (err) {
-    console.warn('[Gemini] SDK error:', err.message);
+    warn('SDK error:', err.message);
     return null;
   }
 }
@@ -87,7 +104,7 @@ function _extractJSON(text) {
     try {
       return JSON.parse(jsonStr.replace(/'/g, '"'));
     } catch {
-      console.warn('[Gemini] Could not parse JSON:', jsonStr.substring(0, 200));
+      warn('Could not parse JSON:', jsonStr.substring(0, 200));
       return null;
     }
   }
@@ -147,10 +164,11 @@ async function _doAnalyze(boardState, hash) {
   };
 
   _cache.set(hash, result);
-  if (_cache.size > 50) {
+  if (_cache.size > MAX_CACHE_SIZE) {
     const firstKey = _cache.keys().next().value;
     _cache.delete(firstKey);
   }
+  log('Cache stored, size:', _cache.size);
 
   return result;
 }

@@ -10,24 +10,28 @@ Play **with** an AI oracle, not against one.
 - 💡 **Strategic Hints** — Ask the Oracle for a recommended next move with reasoning
 - 💀 **Death Narration** — AI-generated dramatic narration when you hit a mine
 - ♿ **Full Accessibility** — ARIA labels, keyboard navigation, screen-reader support
+- 🏆 **Live Leaderboard** — Real-time global scores via Firebase Realtime Database
 - 🎨 **Premium Dark UI** — Glassmorphism panels, neon gradients, smooth micro-animations
 
 ## Quick Start
 
 1. **Clone** the repository
 2. **Copy** `config.example.js` → `config.js`
-3. **Add** your [Gemini API key](https://aistudio.google.com/app/apikey) to `config.js`
+3. **Add** your [Gemini API key](https://aistudio.google.com/app/apikey) and Firebase config to `config.js`
 4. **Open** `index.html` in a modern browser — no build step required
 
 ## Google Services
 
-1. Google Gemini 2.0 Flash API — Core game AI Oracle and reasoning
-2. Firebase Realtime Database — Read/write with `onValue` listeners for the leaderboard
-3. Firebase Analytics — Custom event logging
-4. Firebase Hosting / Cloud Storage — Asset and config storage
-5. Google Cloud Run — Production deployment, auto-scaling, HTTPS
-6. Google Artifact Registry — Docker image storage
-7. Google Cloud Build — CI/CD container builds
+| Service | Purpose | Integration Type |
+|---|---|---|
+| Gemini 2.0 Flash | AI probability heatmap, hints, death narration | REST API (client-side) |
+| Firebase Authentication | Anonymous auth gates leaderboard writes, prevents spam | Firebase SDK |
+| Firebase Realtime Database | Live global leaderboard with `onValue` listener | Firebase SDK |
+| Firebase Analytics | 9 custom game events tracked | Firebase SDK |
+| Google Cloud Run | Production deployment, auto-scaling, HTTPS | Infrastructure |
+| Google Artifact Registry | Docker image storage (`us-central1`) | Infrastructure |
+| Google Cloud Build | Container build pipeline | Infrastructure |
+| Google Fonts | Inter + JetBrains Mono typography | CDN |
 
 ## Controls
 
@@ -44,11 +48,12 @@ Play **with** an AI oracle, not against one.
 ├── index.html          Main app
 ├── config.js           Your API key (gitignored)
 ├── config.example.js   Key format template
+├── DEPLOYMENT.md       Cloud Run deployment guide
 ├── src/
-│   ├── game.js         Core Minesweeper logic
-│   ├── gemini.js       Gemini API integration
-│   ├── ui.js           DOM rendering & accessibility
-│   └── firebase.js     Firebase Realtime Database leaderboard + Analytics
+│   ├── game.js         Core Minesweeper logic (pure functions)
+│   ├── gemini.js       Gemini 2.0 Flash API integration
+│   ├── ui.js           DOM rendering, accessibility & analytics
+│   └── firebase.js     Firebase Auth, RTDB leaderboard + Analytics
 └── tests/
     ├── index.html      Test runner
     └── gemini.test.js  Unit tests

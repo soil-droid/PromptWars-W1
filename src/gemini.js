@@ -4,7 +4,7 @@
 
 import { GoogleGenerativeAI } from 'https://cdn.jsdelivr.net/npm/@google/generative-ai/+esm';
 
-const DEBOUNCE_MS = 3000;
+const DEBOUNCE_MS = 10000; // 10 seconds minimum between auto-calls;
 
 let _apiCallCount = 0;
 let _lastCallTime = 0;

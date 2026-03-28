@@ -325,7 +325,9 @@ import * as Leaderboard from './firebase.js';
     }
 
     // Trigger Gemini analysis
-    triggerAnalysis();
+    if (result.revealedCells.length > 0 && countRevealed() % 5 === 0) {
+      triggerAnalysis();
+    }
   }
 
   function handleFlag(r, c) {

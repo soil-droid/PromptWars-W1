@@ -1,11 +1,17 @@
 #!/bin/sh
-# Generate config.js from the GEMINI_API_KEY environment variable
-if [ -n "$GEMINI_API_KEY" ]; then
-  echo "const CONFIG = { GEMINI_API_KEY: '${GEMINI_API_KEY}' };" > /usr/share/nginx/html/config.js
-  echo "[Entrypoint] Generated config.js with CONFIG object from environment."
-else
-  echo "[Entrypoint] Warning: GEMINI_API_KEY environment variable is not set."
-fi
-
-# Start NGINX
-exec "$@"
+cat > /usr/share/nginx/html/config.js << JSEOF
+const CONFIG = {
+  GEMINI_API_KEY: '${GEMINI_API_KEY}',
+  FIREBASE_CONFIG: {
+    apiKey: '${FIREBASE_API_KEY}',
+    authDomain: '${FIREBASE_AUTH_DOMAIN}',
+    databaseURL: '${FIREBASE_DATABASE_URL}',
+    projectId: '${FIREBASE_PROJECT_ID}',
+    storageBucket: '${FIREBASE_STORAGE_BUCKET}',
+    messagingSenderId: '${FIREBASE_MESSAGING_SENDER_ID}',
+    appId: '${FIREBASE_APP_ID}'
+  }
+};
+JSEOF
+echo "[Entrypoint] Generated config.js with Gemini + Firebase config."
+exec "\$@"

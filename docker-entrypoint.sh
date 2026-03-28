@@ -1,5 +1,5 @@
 #!/bin/sh
-cat > /usr/share/nginx/html/config.js << JSEOF
+cat > /usr/share/nginx/html/config.js << INNEREOF
 const CONFIG = {
   GEMINI_API_KEY: '${GEMINI_API_KEY}',
   FIREBASE_CONFIG: {
@@ -12,6 +12,6 @@ const CONFIG = {
     appId: '${FIREBASE_APP_ID}'
   }
 };
-JSEOF
+INNEREOF
 echo "[Entrypoint] Generated config.js with Gemini + Firebase config."
-exec "\$@"
+exec "$@"

@@ -1,0 +1,4 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '--no-cache', '-t', 'us-central1-docker.pkg.dev/promptwars-w1/minesweeper-oracle/app:latest', '.']
+images: ['us-central1-docker.pkg.dev/promptwars-w1/minesweeper-oracle/app:latest']

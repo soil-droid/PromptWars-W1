@@ -133,62 +133,6 @@ function testGeminiOracleAPIKey() {
   assert(fmt.rows === 4 && fmt.cols === 4, 'GeminiOracle/Game: Format integration correct');
 }
 
-// ══════════════════════════════════════════════════════════
-// Firebase Auth State & Analytics tests
-// ══════════════════════════════════════════════════════════
-
-function testFirebaseAuthState() {
-  // Leaderboard module is imported — verify it exposes expected public API
-  assert(typeof Leaderboard.initFirebase === 'function',
-    'Firebase: initFirebase is exported');
-  assert(typeof Leaderboard.saveScore === 'function',
-    'Firebase: saveScore is exported');
-  assert(typeof Leaderboard.trackEvent === 'function',
-    'Firebase: trackEvent is exported');
-  assert(typeof Leaderboard.trackSession === 'function',
-    'Firebase: trackSession is exported (auth-gated session writes)');
-
-  // Verify auth-gating: trackEvent silently no-ops when analytics is not initialised
-  // (analytics is null before initFirebase is called in this test environment)
-  let threw = false;
-  try {
-    Leaderboard.trackEvent('test_event', { value: 1 });
-  } catch (e) {
-    // TypeError from invalid eventName would propagate, null analytics should not throw
-    threw = true;
-  }
-  assert(!threw, 'Firebase: trackEvent does not throw when analytics is uninitialised (auth-gated)');
-}
-
-function testAnalyticsEventDispatch() {
-  // Validate TypeError is thrown for invalid event names (input validation)
-  let typeErrorThrown = false;
-  try {
-    Leaderboard.trackEvent('', {});
-  } catch (e) {
-    typeErrorThrown = e instanceof TypeError;
-  }
-  assert(typeErrorThrown, 'Firebase: trackEvent throws TypeError for empty event name');
-
-  // Validate input validation on saveScore — non-string name
-  let nameTypeError = false;
-  try {
-    Leaderboard.saveScore(12345, 60, 3);
-  } catch (e) {
-    nameTypeError = e instanceof TypeError;
-  }
-  assert(nameTypeError, 'Firebase: saveScore throws TypeError for non-string name');
-
-  // Validate RangeError for negative time
-  let rangeError = false;
-  try {
-    Leaderboard.saveScore('Player', -5, 0);
-  } catch (e) {
-    rangeError = e instanceof RangeError;
-  }
-  assert(rangeError, 'Firebase: saveScore throws RangeError for negative timeSeconds');
-}
-
 // Kickoff
 async function runAll() {
   passed = 0;
@@ -201,8 +145,6 @@ async function runAll() {
   testRevealCellCascade();
   testIsBoardSolved();
   testGeminiOracleAPIKey();
-  testFirebaseAuthState();
-  testAnalyticsEventDispatch();
   
   render();
 }

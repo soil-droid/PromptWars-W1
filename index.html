@@ -1,17 +1,11 @@
 <!DOCTYPE html>
-<!-- ================================================================
-  Deployed on Google Cloud Run (us-central1)
-  Health check:  GET /health  → 200 OK  (served by nginx)
-  Container:     Artifact Registry — us-central1-docker.pkg.dev/promptwars-w1/minesweeper-oracle/app
-  Build:         Google Cloud Build
-================================================================ -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://esm.run;
+    script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net;
     connect-src 'self'
       https://generativelanguage.googleapis.com
       https://*.firebaseio.com
@@ -19,8 +13,7 @@
       https://*.google-analytics.com
       https://*.analytics.google.com
       https://www.gstatic.com
-      https://cdn.jsdelivr.net
-      https://esm.run;
+      https://cdn.jsdelivr.net;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
   ">
@@ -609,10 +602,7 @@
       </div>
 
       <div class="panel">
-        <div class="panel-title">
-          Top Oracles
-          <span id="leaderboard-live-badge" style="display:none;margin-left:6px;padding:2px 7px;border-radius:10px;background:rgba(29,158,117,0.2);border:1px solid #1D9E75;color:#1D9E75;font-size:0.6rem;font-weight:700;letter-spacing:0.05em">● LIVE</span>
-        </div>
+        <div class="panel-title">Top Oracles</div>
         <div id="leaderboard-list">Leaderboard loading...</div>
       </div>
 

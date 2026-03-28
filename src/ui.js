@@ -1,48 +1,34 @@
-/**
- * @file ui.js
- * @description DOM rendering, accessibility management, and game controller.
- *              Wires Firebase Analytics events for all player interactions,
- *              manages the Gemini Oracle heatmap and hint system, and handles
- *              keyboard + mouse input with full ARIA support.
- * @module ui
- */
+// ═══════════════════════════════════════════════════════════
+// ui.js — DOM Rendering, Accessibility & Game Controller
+// ═══════════════════════════════════════════════════════════
 
 import * as MinesweeperGame from './game.js';
 import * as GeminiOracle from './gemini.js';
 import * as Leaderboard from './firebase.js';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const ROWS = 16;
-const COLS = 16;
-const MINES = 40;
-const REVEAL_STAGGER_MS = 15;
-const HINT_PULSE_MS = 2000;
-const GAME_OVER_DELAY_MS = 300;
+// ── Configuration ──────────────────────────────────────
+  const ROWS = 16;
+  const COLS = 16;
+  const MINES = 40;
 
-// ─── State ────────────────────────────────────────────────────────────────────
-let board = null;
-let gameStarted = false;
-let gameOver = false;
-let gameWon = false;
-let firstClick = true;
-let timerInterval = null;
-let seconds = 0;
-let heatmapVisible = false;
-let probabilities = null;
-let focusedRow = 0;
-let focusedCol = 0;
-let isAnalyzing = false;
-let lastReasoning = '';
+  // ── State ──────────────────────────────────────────────
+  let board = null;
+  let gameStarted = false;
+  let gameOver = false;
+  let gameWon = false;
+  let firstClick = true;
+  let timerInterval = null;
+  let seconds = 0;
+  let heatmapVisible = false;
+  let probabilities = null;
+  let focusedRow = 0;
+  let focusedCol = 0;
+  let isAnalyzing = false;
+  let lastReasoning = '';
 
-// ─── Color Helpers ────────────────────────────────────────────────────────────
+  // ── Color Helpers ──────────────────────────────────────
 
-/**
- * Maps a mine probability value to an RGB colour string.
- * Interpolates green→yellow→red across the 0→1 range.
- * @param {number} prob - Probability value between 0 and 1.
- * @returns {string} CSS rgb() colour string.
- */
-function probToColor(prob) {
+  function probToColor(prob) {
     // #1D9E75 (safe/green) → #E8C841 (mid/yellow) → #E24B4A (danger/red)
     const r0 = 0x1D, g0 = 0x9E, b0 = 0x75;
     const r1 = 0xE8, g1 = 0xC8, b1 = 0x41;
@@ -63,12 +49,7 @@ function probToColor(prob) {
     return `rgb(${r}, ${g}, ${b})`;
   }
 
-/**
- * Computes a CSS box-shadow glow string proportional to mine probability.
- * @param {number} prob - Probability value between 0 and 1.
- * @returns {string} CSS box-shadow value string.
- */
-function probToGlow(prob) {
+  function probToGlow(prob) {
     const color = probToColor(prob);
     const intensity = 0.15 + prob * 0.35;
     return `0 0 ${8 + prob * 12}px rgba(${prob > 0.5 ? '226,75,74' : '29,158,117'}, ${intensity})`;
@@ -87,19 +68,15 @@ function probToGlow(prob) {
     8: '#A1887F'
   };
 
-// ─── DOM References ───────────────────────────────────────────────────────────
-let boardEl, mineCountEl, timerEl, oracleCountEl, confidenceEl;
-let reasoningEl, heatmapBtn, askOracleBtn, gameOverOverlay;
-let narrationEl, statusEl;
+  // ── DOM References ─────────────────────────────────────
 
-// ─── Initialise ───────────────────────────────────────────────────────────────
+  let boardEl, mineCountEl, timerEl, oracleCountEl, confidenceEl;
+  let reasoningEl, heatmapBtn, askOracleBtn, gameOverOverlay;
+  let narrationEl, statusEl;
 
-/**
- * Bootstraps the application: queries DOM elements, attaches event listeners,
- * initialises Firebase (if configured), and starts the first game.
- * @returns {void}
- */
-function init() {
+  // ── Initialise ─────────────────────────────────────────
+
+  function init() {
     boardEl = document.getElementById('game-board');
     mineCountEl = document.getElementById('mine-count');
     timerEl = document.getElementById('timer');
@@ -132,14 +109,9 @@ function init() {
     newGame();
   }
 
-// ─── New Game ─────────────────────────────────────────────────────────────────
+  // ── New Game ───────────────────────────────────────────
 
-/**
- * Resets all game state and re-renders a fresh board.
- * Clears the timer, probabilities cache, and game-over overlay.
- * @returns {void}
- */
-function newGame() {
+  function newGame() {
     clearInterval(timerInterval);
     seconds = 0;
     gameStarted = false;
@@ -180,14 +152,9 @@ function newGame() {
     focusCell(0, 0);
   }
 
-// ─── Timer ────────────────────────────────────────────────────────────────────
+  // ── Timer ──────────────────────────────────────────────
 
-/**
- * Starts the game timer interval, updating the display every second.
- * No-ops if timer is already running.
- * @returns {void}
- */
-function startTimer() {
+  function startTimer() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
       seconds++;
@@ -197,25 +164,16 @@ function startTimer() {
     }, 1000);
   }
 
-// ─── Mine Counter ─────────────────────────────────────────────────────────────
+  // ── Mine Counter ───────────────────────────────────────
 
-/**
- * Recalculates and displays the remaining unflagged mine count.
- * @returns {void}
- */
-function updateMineCounter() {
+  function updateMineCounter() {
     const flags = MinesweeperGame.countFlags(board);
     mineCountEl.textContent = String(MINES - flags).padStart(3, '0');
   }
 
-// ─── Render Board ─────────────────────────────────────────────────────────────
+  // ── Render Board ───────────────────────────────────────
 
-/**
- * Rebuilds the entire board table in the DOM from current state.
- * Called on new game; incremental updates use refreshCell().
- * @returns {void}
- */
-function renderBoard() {
+  function renderBoard() {
     boardEl.innerHTML = '';
     const table = document.createElement('table');
     table.setAttribute('role', 'grid');
@@ -234,13 +192,7 @@ function renderBoard() {
     boardEl.appendChild(table);
   }
 
-/**
- * Creates a single <td> board cell with event listeners and initial DOM state.
- * @param {number} r - Row index.
- * @param {number} c - Column index.
- * @returns {HTMLTableCellElement} The configured cell element.
- */
-function createCell(r, c) {
+  function createCell(r, c) {
     const cell = board[r][c];
     const td = document.createElement('td');
     td.setAttribute('role', 'gridcell');
@@ -258,14 +210,7 @@ function createCell(r, c) {
     return td;
   }
 
-/**
- * Updates an existing cell element's appearance to match the current cell state.
- * Applies revealed/flagged/hidden styles and optional heatmap overlay.
- * @param {HTMLTableCellElement} td - The cell DOM element.
- * @param {Object} cell - The cell data object.
- * @returns {void}
- */
-function updateCellDOM(td, cell) {
+  function updateCellDOM(td, cell) {
     td.className = 'cell';
     td.textContent = '';
 
@@ -311,22 +256,12 @@ function updateCellDOM(td, cell) {
     }
   }
 
-/**
- * Re-renders a single cell by ID without rebuilding the whole board.
- * @param {number} r - Row index.
- * @param {number} c - Column index.
- * @returns {void}
- */
-function refreshCell(r, c) {
+  function refreshCell(r, c) {
     const td = document.getElementById(`cell-${r}-${c}`);
     if (td) updateCellDOM(td, board[r][c]);
   }
 
-/**
- * Re-renders every cell on the board. Called when heatmap is toggled.
- * @returns {void}
- */
-function refreshAllCells() {
+  function refreshAllCells() {
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         refreshCell(r, c);
@@ -334,17 +269,9 @@ function refreshAllCells() {
     }
   }
 
-// ─── Cell Click Handling ──────────────────────────────────────────────────────
+  // ── Cell Click Handling ────────────────────────────────
 
-/**
- * Routes a mouse event on a cell to the appropriate handler.
- * Left click → reveal, right/ctrl+click → flag, middle/shift+click → chord.
- * @param {number} r - Row index.
- * @param {number} c - Column index.
- * @param {MouseEvent} e - The originating mouse event.
- * @returns {void}
- */
-function handleCellClick(r, c, e) {
+  function handleCellClick(r, c, e) {
     if (gameOver) return;
     e.preventDefault();
 
@@ -362,15 +289,7 @@ function handleCellClick(r, c, e) {
     }
   }
 
-/**
- * Handles a reveal action on the cell at (r, c).
- * On first click: generates the board with a safe zone, starts timer,
- * logs game_start and first_click analytics events, and records a session.
- * @param {number} r - Row index.
- * @param {number} c - Column index.
- * @returns {void}
- */
-function handleReveal(r, c) {
+  function handleReveal(r, c) {
     if (gameOver || board[r][c].revealed || board[r][c].flagged) return;
 
     if (firstClick) {
@@ -379,9 +298,6 @@ function handleReveal(r, c) {
       firstClick = false;
       gameStarted = true;
       startTimer();
-      Leaderboard.trackEvent('game_start', { board_size: `${ROWS}x${COLS}`, mines: MINES });
-      Leaderboard.trackEvent('first_click', { row: r, col: c });
-      Leaderboard.trackSession();
     }
 
     const result = MinesweeperGame.revealCell(board, r, c);
@@ -390,9 +306,6 @@ function handleReveal(r, c) {
       endGame(false, { row: r, col: c });
       return;
     }
-
-    // Log cell_revealed for the directly clicked cell
-    Leaderboard.trackEvent('cell_revealed', { row: r, col: c, was_safe: true });
 
     // Refresh revealed cells with staggered animation
     result.revealedCells.forEach((cell, i) => {
@@ -403,7 +316,7 @@ function handleReveal(r, c) {
           updateCellDOM(td, board[cell.row][cell.col]);
           setTimeout(() => td.classList.remove('revealing'), 300);
         }
-      }, i * REVEAL_STAGGER_MS);
+      }, i * 15);
     });
 
     if (MinesweeperGame.isBoardSolved(board)) {
@@ -415,29 +328,14 @@ function handleReveal(r, c) {
     triggerAnalysis();
   }
 
-/**
- * Toggles a flag on the cell at (r, c) and logs a flag_placed analytics event.
- * @param {number} r - Row index.
- * @param {number} c - Column index.
- * @returns {void}
- */
-function handleFlag(r, c) {
+  function handleFlag(r, c) {
     if (gameOver || board[r][c].revealed) return;
     MinesweeperGame.toggleFlag(board, r, c);
     refreshCell(r, c);
     updateMineCounter();
-    const totalFlags = MinesweeperGame.countFlags(board);
-    Leaderboard.trackEvent('flag_placed', { flags_total: totalFlags });
   }
 
-/**
- * Performs a chord-reveal around a numbered cell (r, c).
- * Ends the game if a mine is hit; triggers analysis on new reveals.
- * @param {number} r - Row index.
- * @param {number} c - Column index.
- * @returns {void}
- */
-function handleChord(r, c) {
+  function handleChord(r, c) {
     if (gameOver) return;
     const result = MinesweeperGame.chordReveal(board, r, c);
     if (result.hitMine) {
@@ -454,15 +352,9 @@ function handleChord(r, c) {
     if (result.revealedCells.length > 0) triggerAnalysis();
   }
 
-// ─── Keyboard Navigation ──────────────────────────────────────────────────────
+  // ── Keyboard Navigation ────────────────────────────────
 
-/**
- * Handles keyboard events on the game board for arrow-key navigation,
- * reveal (Enter/Space), flag (F), and chord (C) actions.
- * @param {KeyboardEvent} e - The keyboard event.
- * @returns {void}
- */
-function handleKeyboard(e) {
+  function handleKeyboard(e) {
     if (gameOver) return;
 
     const key = e.key;
@@ -496,13 +388,7 @@ function handleKeyboard(e) {
     }
   }
 
-/**
- * Moves keyboard focus to the cell at (r, c), resetting all other tabIndexes.
- * @param {number} r - Row index.
- * @param {number} c - Column index.
- * @returns {void}
- */
-function focusCell(r, c) {
+  function focusCell(r, c) {
     // Reset all tabindexes
     const allCells = boardEl.querySelectorAll('td');
     allCells.forEach(td => td.tabIndex = -1);
@@ -514,15 +400,9 @@ function focusCell(r, c) {
     }
   }
 
-// ─── Gemini Analysis ──────────────────────────────────────────────────────────
+  // ── Gemini Analysis ────────────────────────────────────
 
-/**
- * Requests a board probability analysis from the Gemini Oracle.
- * Logs an oracle_consulted analytics event and updates the confidence meter.
- * Debounces calls via the GeminiOracle module.
- * @returns {Promise<void>}
- */
-async function triggerAnalysis() {
+  async function triggerAnalysis() {
     if (!GeminiOracle.isApiConfigured() || isAnalyzing) return;
 
     isAnalyzing = true;
@@ -535,12 +415,9 @@ async function triggerAnalysis() {
 
     isAnalyzing = false;
     oracleCountEl.textContent = GeminiOracle.getApiCallCount();
-
-    const minesLeft = MINES - MinesweeperGame.countFlags(board);
-    Leaderboard.trackEvent('oracle_consulted', {
-      cells_revealed: countRevealed(),
-      mines_remaining: minesLeft,
-    });
+    
+    // Log oracle consult event
+    Leaderboard.trackEvent('oracle_consulted', { board_progress: countRevealed() });
 
     if (result && result.probabilities) {
       probabilities = result.probabilities;
@@ -566,28 +443,18 @@ async function triggerAnalysis() {
     }
   }
 
-// ─── Heatmap Toggle ───────────────────────────────────────────────────────────
+  // ── Heatmap Toggle ─────────────────────────────────────
 
-/**
- * Toggles the probability heatmap overlay and logs a heatmap_toggled event.
- * @returns {void}
- */
-function toggleHeatmap() {
+  function toggleHeatmap() {
     heatmapVisible = !heatmapVisible;
     heatmapBtn.textContent = heatmapVisible ? '🔮 Hide Oracle Vision' : '🔮 Show Oracle Vision';
     heatmapBtn.setAttribute('aria-pressed', heatmapVisible);
-    Leaderboard.trackEvent('heatmap_toggled', { visible: heatmapVisible });
     refreshAllCells();
   }
 
-// ─── Ask Oracle ───────────────────────────────────────────────────────────────
+  // ── Ask Oracle ─────────────────────────────────────────
 
-/**
- * Requests a strategic hint from the Gemini Oracle, highlights the suggested
- * cell, and logs a hint_requested analytics event.
- * @returns {Promise<void>}
- */
-async function askOracle() {
+  async function askOracle() {
     if (!GeminiOracle.isApiConfigured() || gameOver || !gameStarted) return;
 
     askOracleBtn.disabled = true;
@@ -597,13 +464,8 @@ async function askOracle() {
     const boardState = MinesweeperGame.boardToAPIFormat(board, minesRemaining);
     const stats = { timeElapsed: seconds, flagsPlaced: MinesweeperGame.countFlags(board) };
 
-    const confidence = probabilities
-      ? Math.round(Math.abs((probabilities.reduce((s, p) => s + p.prob, 0) / probabilities.length) - 0.5) * 200)
-      : 0;
-    Leaderboard.trackEvent('hint_requested', {
-      mines_remaining: minesRemaining,
-      confidence,
-    });
+    // Log hint requested
+    Leaderboard.trackEvent('hint_requested', { mines_remaining: minesRemaining });
 
     const hint = await GeminiOracle.getStrategicHint(boardState, stats);
 
@@ -617,7 +479,7 @@ async function askOracle() {
       const td = document.getElementById(`cell-${hint.row}-${hint.col}`);
       if (td) {
         td.classList.add('hint-pulse');
-        setTimeout(() => td.classList.remove('hint-pulse'), HINT_PULSE_MS);
+        setTimeout(() => td.classList.remove('hint-pulse'), 2000);
       }
 
       oracleCountEl.textContent = GeminiOracle.getApiCallCount();
@@ -626,17 +488,9 @@ async function askOracle() {
     }
   }
 
-// ─── Game Over ────────────────────────────────────────────────────────────────
+  // ── Game Over ──────────────────────────────────────────
 
-/**
- * Handles end-of-game state for both win and loss scenarios.
- * Logs game_won or game_lost analytics events, triggers death narration,
- * and prompts the winner for leaderboard submission.
- * @param {boolean} won - True if the player won.
- * @param {{row: number, col: number}|null} [clickedCell=null] - The fatal cell (loss only).
- * @returns {Promise<void>}
- */
-async function endGame(won, clickedCell = null) {
+  async function endGame(won, clickedCell = null) {
     gameOver = true;
     gameWon = won;
     clearInterval(timerInterval);
@@ -653,12 +507,8 @@ async function endGame(won, clickedCell = null) {
         if (td) td.classList.add('mine-hit');
       }
       
-      Leaderboard.trackEvent('game_lost', {
-        time_seconds: seconds,
-        cells_revealed: countRevealed(),
-        mine_row: clickedCell ? clickedCell.row : -1,
-        mine_col: clickedCell ? clickedCell.col : -1,
-      });
+      // Log game lost event
+      Leaderboard.trackEvent('game_lost', { cells_revealed: countRevealed() });
     }
 
     // Show overlay
@@ -697,14 +547,10 @@ async function endGame(won, clickedCell = null) {
       narrationEl.textContent = narration;
     }
 
-    setTimeout(() => gameOverOverlay.classList.add('visible'), GAME_OVER_DELAY_MS);
+    setTimeout(() => gameOverOverlay.classList.add('visible'), 300);
   }
 
-/**
- * Counts the number of non-mine cells currently revealed.
- * @returns {number} Revealed safe cell count.
- */
-function countRevealed() {
+  function countRevealed() {
     let count = 0;
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
